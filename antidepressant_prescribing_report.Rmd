@@ -1,0 +1,450 @@
+---
+title: "Antidepressant Prescribing Report"
+author: "Usama Masood"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+  pdf_document:
+    toc: true
+    toc_depth: '3'
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+
+```{r setup, include=FALSE}
+# Load required libraries
+if (!requireNamespace("knitr", quietly = TRUE)) install.packages("knitr")
+if (!requireNamespace("gt", quietly = TRUE)) install.packages("gt")
+if (!requireNamespace("tidyverse", quietly = TRUE)) install.packages("tidyverse")
+if (!requireNamespace("highcharter", quietly = TRUE)) install.packages("highcharter")
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+knitr::opts_knit$set(root.dir = rprojroot::find_root(criterion = rprojroot::is_rstudio_project))
+```
+
+```{r load-libraries, message=FALSE, warning=FALSE, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(knitr)
+library(highcharter)
+library(kableExtra)
+library(stringr)
+library(gt)
+```
+
+
+```{r load-data, message=FALSE, include=FALSE}
+# Load dataset
+data <- readRDS("Data/STEP_UP_REGIONAL_ANTIDEPRESSANTS.Rds")
+# View first few rows
+head(data)
+```
+Introduction
+
+The **NHS Step-Up Challenge** focuses on analyzing antidepressant prescribing trends in England. This report investigates the volume and cost of antidepressant prescriptions across different regions over a four-year period.
+
+# Part One: National & Regional Overview
+
+## Visual comparison between Annual Antidepressant prescriptions and Annual prescription Cost
+
+```{r yearly-prescriptions, echo=FALSE}
+data %>%
+  group_by(YEAR) %>%
+  summarise(Total_Items = sum(ITEMS)) %>%
+  ggplot(aes(x = factor(YEAR), y = Total_Items, fill = YEAR)) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(labels = scales::comma) +
+  labs(title = "Total Annual Antidepressant Prescriptions", x = "Year", y = "Number of Items") +
+  theme_minimal()
+```
+
+```{r yearly-cost, echo=FALSE}
+data %>%
+  group_by(YEAR) %>%
+  summarise(Total_Cost = sum(COST)) %>%
+  ggplot(aes(x = factor(YEAR), y = Total_Cost, fill = YEAR)) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(labels = scales::comma) +
+  labs(title = "Total Annual Antidepressant Prescription Cost", x = "Year", y = "Total Cost (£)") +
+  theme_minimal()
+```
+
+### Description and Comparison of Trends
+- Prescribing Volume Trend (Total Items): The bar chart showing the total antidepressant prescriptions (items) over the years demonstrates a steady increase in prescriptions from 2021 to 2024. This suggests a growing trend in the usage of antidepressants across England during this period.
+
+- Prescription Cost Trend: The bar chart for the total antidepressant prescribing cost shows that the cost total cost for year 2021 is far more than any other year it may be because of COVID-19 after effects. While the cost trend in 2022, 2023 and 2024 is much different but very less than 2021.
+
+### Comparison
+This comparison provides insights into how both prescribing behavior and medication costs are evolving in parallel, with cost decreases first and then remains same outpacing volume increases in some years.
+
+
+## Tabular comparision between total annual antidepressant prescribing per region and annual antidepressant prescribing cost per region. 
+
+
+```{r total-annual-antidepressant-prescribing-per-region, echo=FALSE}
+data %>%
+  group_by(YEAR, REGION) %>%
+  summarise(Total_Items = sum(ITEMS), .groups = "drop") %>%
+  ungroup() %>%
+  pivot_wider(names_from = YEAR, values_from = Total_Items) %>%
+  kable(caption = "Total Annual Antidepressant Prescribing per Region (Items)", format = "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive"), full_width = TRUE) %>%
+  column_spec(1, bold = TRUE)  # Make the first column bold (Region)
+```
+
+
+
+```{r annual-antidepressant-prescribing-cost-per-region, echo=FALSE}
+
+data %>%
+  group_by(YEAR, REGION) %>%
+  summarise(Total_Cost = sum(COST), .groups = "drop") %>%  # Drop grouping to suppress warning
+  ungroup() %>%
+  pivot_wider(names_from = YEAR, values_from = Total_Cost) %>%
+  kable(caption = "Total Annual Cost of Antidepressant Prescribing per Region (£)", format = "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive"), full_width = TRUE) %>%
+  column_spec(1, bold = TRUE)  # Make the first column bold (Region)
+
+```
+
+### Description and Comparison of Regional Changes Between 2021 and 2024
+
+- Prescribing Volume (Items): From the first table, we can observe the total annual antidepressant prescriptions (items) per region. All regions show steady growth in prescribing volumes over the years. For example, a region with a significant increase in 2024 compared to 2021 could indicate a rise in antidepressant usage, possibly linked to mental health trends or changes in healthcare practices in that region.
+
+- Prescribing Cost: The second table shows the annual antidepressant prescribing cost per region. It has a different trend as compared to above table. The cost for 2021 is much more higher than any other year (May be because of the COVID-19), but remains almost the same for rest of the years. 
+
+## Visual compariosn between 10 most prescribed antidepressants across the four years and antidepressants with the greatest total prescribing cost across the entire four year period
+
+```{r 10-Most-Prescribed-Antidepressants, echo=FALSE}
+data %>%
+  group_by(DRUG) %>%
+  summarise(Total_Items = sum(ITEMS)) %>%
+  arrange(desc(Total_Items)) %>%
+  slice_head(n = 10) %>%
+  ggplot(aes(x = reorder(DRUG, Total_Items), y = Total_Items, fill = DRUG)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  scale_y_continuous(labels = scales::comma) +  # Format the y-axis numbers with commas
+  labs(title = "Top 10 Most Prescribed Antidepressants (by Items)", x = "Antidepressant", y = "Total Items") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 10),   # Adjust size for y-axis labels
+        axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better readability
+```
+
+
+```{r Greatest-Total-Prescribing-Cost, echo=FALSE}
+data %>%
+  group_by(DRUG) %>%
+  summarise(Total_Cost = sum(COST)) %>%
+  arrange(desc(Total_Cost)) %>%
+  slice_head(n = 10) %>%
+  ggplot(aes(x = reorder(DRUG, Total_Cost), y = Total_Cost, fill = DRUG)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  scale_y_continuous(labels = scales::comma) +  # Format the y-axis numbers with commas
+  labs(title = "Top 10 Antidepressants by Total Prescribing Cost (£)", x = "Antidepressant", y = "Total Cost (£)") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 10),   # Adjust size for y-axis labels (drug names)
+        axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better readability
+
+
+```
+
+### Description and Comparison of the Bar Charts
+
+- Most Prescribed Antidepressants (by Items): The first chart shows the 10 most prescribed antidepressants over the four-year period in terms of volume (items). These medications are likely to be more commonly prescribed for treating depression and related conditions across the population. The chart reflects the relative volume of prescriptions for each drug, and we expect to see medications that are well-established and widely used.
+
+- Most Expensive Antidepressants (by Cost): The second chart highlights the 10 antidepressants with the greatest total prescribing cost across the entire four-year period. While the drugs listed here might overlap with the most prescribed ones, we may also see differences. For example, a medication that is prescribed less frequently but has a high cost per unit could appear on this list, resulting in a higher total cost despite a lower volume.
+
+### Key Differences:
+- Volume vs. Cost: The key difference between the two charts lies in the contrast between prescription volume and cost. Some drugs with high volumes may appear in both charts (e.g.,sertraline hydrochloride), but others may show up only in the cost chart due to their higher per-unit prices(e.g. tranylcypromine sulfate), even though they are prescribed less frequently.
+
+- Impact of Pricing: Some medications that are prescribed less frequently but have a high price point (e.g., fluoxetine hydrochloride) could have a disproportionately high cost compared to their volume. This highlights the influence of drug pricing on overall prescribing costs, which is not necessarily tied to volume.
+
+
+# Part Two: Longitudinal Analysis of Antidepressant Prescribing
+In this section, we will explore the longitudinal (monthly) trends for antidepressant items and their associated costs. We will then identify the antidepressant drugs that are driving these trends and provide a high-level summary of our findings.
+
+
+## Longitudinal (Monthly) Trend for All Antidepressant Items
+To analyze the overall monthly trend of antidepressant prescribing, we will aggregate the data by month and year, then plot the total number of antidepressant items prescribed.
+
+```{r Antidepressant-Items, echo=FALSE}
+data %>%
+  mutate(Month = substr(YM, 5, 6)) %>%  # Extract month from YM
+  group_by(Month) %>%
+  summarise(Total_Items = sum(ITEMS)) %>%
+  ggplot(aes(x = Month, y = Total_Items, group = 1)) +  # Ensure a connected line
+  geom_line(color = "blue") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(labels = c("01" = "Jan", "02" = "Feb", "03" = "Mar", "04" = "Apr",
+                              "05" = "May", "06" = "Jun", "07" = "Jul", "08" = "Aug",
+                              "09" = "Sep", "10" = "Oct", "11" = "Nov", "12" = "Dec")) +  
+  labs(title = "Monthly Trend of Antidepressant Prescriptions", x = "Month", y = "Total Items") +
+  theme_minimal()
+
+```
+
+## Longitudinal (Monthly) Trend for Antidepressant Prescribing Costs
+Next, we will analyze the trend in the total cost of antidepressant prescribing over time. This helps us understand how costs are evolving over the same period.
+
+
+```{r Prescribing-Costs, echo=FALSE}
+data %>%
+  mutate(Month = substr(YM, 5, 6)) %>%  # Extract month from YM
+  group_by(Month) %>%
+  summarise(Total_Cost = sum(COST)) %>%
+  ggplot(aes(x = Month, y = Total_Cost, group = 1)) +  # Ensure a connected line
+  geom_line(color = "green") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_discrete(labels = c("01" = "Jan", "02" = "Feb", "03" = "Mar", "04" = "Apr",
+                              "05" = "May", "06" = "Jun", "07" = "Jul", "08" = "Aug",
+                              "09" = "Sep", "10" = "Oct", "11" = "Nov", "12" = "Dec")) +  
+  labs(title = "Monthly Trend of Antidepressant Prescription Costs", x = "Month", y = "Total Cost (£)") +
+  theme_minimal()
+
+
+```
+
+## Exploring the Drugs Driving Monthly Item and Cost Trends
+To identify which antidepressant drugs are driving the trends in monthly prescribing items and costs, we will focus on drugs that have a significant impact on these metrics.
+
+- Most Prescribed Drugs by Item Count (Monthly)
+
+```{r Most-Prescribed-Drugs-by-Item-Count, echo=FALSE}
+data %>%
+  mutate(YM = as.factor(YM)) %>%  # Ensure YM is a factor for proper ordering
+  group_by(YM, DRUG) %>%
+  summarise(Total_Items = sum(ITEMS), .groups = "drop") %>%  # Drop grouping to suppress warning
+  arrange(YM, desc(Total_Items)) %>%
+  slice_head(n = 5) %>%
+  ggplot(aes(x = reorder(DRUG, Total_Items), y = Total_Items, fill = DRUG)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  scale_y_continuous(labels = scales::comma) +
+  labs(title = "Top 5 Most Prescribed Antidepressants by Month", x = "Antidepressant", y = "Total Items") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))  # Rotate x-axis labels for better readability
+```
+
+
+```{r Most-Expensive-Drugs-by-Cost, echo=FALSE}
+data %>%
+  mutate(Year = substr(YM, 1, 4),  # Extract year (first 4 digits)
+         Month = substr(YM, 5, 6),  # Extract month (last 2 digits)
+         Month_Year = as.factor(paste0(Year, "-", Month))) %>%  # Create Month_Year
+  group_by(Month_Year, DRUG) %>%
+  summarise(Total_Cost = sum(COST), .groups = "drop") %>%  # Drop grouping to suppress warning
+  arrange(Month_Year, desc(Total_Cost)) %>%
+  slice_head(n = 5) %>%
+  ggplot(aes(x = reorder(DRUG, Total_Cost), y = Total_Cost, fill = DRUG)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  scale_y_continuous(labels = scales::comma) +
+  labs(title = "Top 5 Most Expensive Antidepressants by Month (£)", x = "Antidepressant", y = "Total Cost (£)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))  # Rotate x-axis labels for better readability
+```
+
+## High-Level Summary of Findings
+
+### Volume Trends:
+The monthly trend chart for antidepressant prescriptions highlights the fluctuations in the volume of prescriptions over time. We may observe certain months with higher prescriptions due to factors such as seasonality or changes in healthcare guidelines. It is crucial to note that large spikes or drops in prescriptions may coincide with specific healthcare events or public health campaigns.
+
+### Cost Trends:
+Similarly, the trend for total prescribing costs reveals how the overall cost burden of antidepressants is evolving. Costs may follow a different trend than volume due to the introduction of more expensive drugs or changes in the prices of commonly prescribed medications.
+
+### Key Drivers:
+Through the monthly analysis of the most prescribed and most expensive drugs, we can identify specific medications that are significantly influencing these trends. For example, we may see that a few high-cost medications dominate the total prescribing cost, even though their volume is lower compared to other, more widely prescribed drugs.
+
+### Implications:
+Understanding these trends and the specific drugs driving them can help policymakers, healthcare providers, and researchers identify opportunities for cost reduction, optimize prescribing practices, and provide targeted interventions for patients. Moreover, recognizing patterns in cost and volume can inform future health policy decisions related to antidepressant prescribing.
+
+# Part Two Extension (Antidepressant Case studies)
+
+## Identify Significant Antidepressants
+Start by summarizing the total volume and total cost of each antidepressant to find out which ones are most prominent.
+
+
+```{r Summary, echo=FALSE}
+
+# Create the summary table
+summary_table <- data %>%
+  group_by(DRUG) %>%
+  summarise(Total_Items = sum(ITEMS), Total_Cost = sum(COST)) %>%
+  arrange(desc(Total_Items)) %>%
+  head(10)  # Top 10 antidepressants by volume
+
+# Format the table nicely
+summary_table %>%
+  gt() %>%
+  fmt_number(columns = c(Total_Items, Total_Cost), decimals = 2) %>%
+  fmt_currency(columns = Total_Cost, currency = "GBP") %>%
+  tab_header(
+    title = "Top 10 Prescribed Antidepressants",
+    subtitle = "Based on Total Items and Total Cost"
+  ) %>%
+  cols_label(
+    DRUG = "Drug Name",
+    Total_Items = "Total Prescriptions",
+    Total_Cost = "Total Cost (£)"
+  ) %>%
+  tab_options(
+    table.font.size = "medium",
+    heading.title.font.size = "large",
+    heading.subtitle.font.size = "small"
+  )
+
+```
+## Percentage of Total Volume or Cost from a Drug
+Once you've identified a prominent drug, you can calculate its percentage contribution to the total volume and cost.
+
+
+```{r percentage-of-total-volume-and-cost, echo=FALSE}
+
+# Ensure ITEMS and COST are numeric
+data$ITEMS <- as.numeric(data$ITEMS)
+data$COST <- as.numeric(data$COST)
+
+# Compute grand totals for volume and cost
+total_volume <- sum(data$ITEMS, na.rm = TRUE)
+total_cost <- sum(data$COST, na.rm = TRUE)
+
+
+# Create summary table
+summary_table <- data %>%
+  group_by(DRUG) %>%
+  summarise(
+    Total_Items = sum(ITEMS, na.rm = TRUE), 
+    Total_Cost = sum(COST, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%  # Remove grouping to ensure correct percentage calculations
+  mutate(
+    Percentage_Volume = (Total_Items / total_volume),
+    Percentage_Cost = (Total_Cost / total_cost)
+  ) %>%
+  arrange(desc(Percentage_Volume)) %>%
+  head(10)  # Get top 10 drugs by volume percentage
+
+# Format and display the table
+summary_table %>%
+  gt() %>%
+  fmt_number(columns = c(Total_Items, Total_Cost), decimals = 2) %>%
+  fmt_currency(columns = Total_Cost, currency = "GBP") %>%
+  fmt_percent(columns = c(Percentage_Volume, Percentage_Cost), decimals = 2) %>%
+  tab_header(
+    title = "Top 10 Antidepressants by Volume & Cost Percentage",
+    subtitle = "Percentage of Total Prescriptions and Cost"
+  ) %>%
+  cols_label(
+    DRUG = "Drug Name",
+    Total_Items = "Total Prescriptions",
+    Total_Cost = "Total Cost (£)",
+    Percentage_Volume = "Volume (%)",
+    Percentage_Cost = "Cost (%)"
+  ) %>%
+  tab_options(
+    table.font.size = "medium",
+    heading.title.font.size = "large",
+    heading.subtitle.font.size = "small"
+  )
+
+
+```
+## Mean Cost per Item for a Drug
+Next, calculate the mean cost per item for each antidepressant and compare them.
+
+```{r mean-cost-per-item-for-each-drug, echo=FALSE}
+
+# Create the summary table with mean cost per item
+summary_table <- data %>%
+  group_by(DRUG) %>%
+  summarise(Mean_Cost_Per_Item = mean(COST / ITEMS, na.rm = TRUE)) %>%  # Avoid division by zero
+  arrange(desc(Mean_Cost_Per_Item)) %>%
+  head(10)  # Top 10 by mean cost per item
+
+# Format and display the table
+summary_table %>%
+  gt() %>%
+  fmt_currency(columns = Mean_Cost_Per_Item, currency = "GBP", decimals = 2) %>%
+  tab_header(
+    title = "Top 10 Antidepressants by Mean Cost per Item",
+    subtitle = "Mean Cost Calculated as Total Cost / Total Items"
+  ) %>%
+  cols_label(
+    DRUG = "Drug Name",
+    Mean_Cost_Per_Item = "Mean Cost per Item (£)"
+  ) %>%
+  tab_options(
+    table.font.size = "medium",
+    heading.title.font.size = "large",
+    heading.subtitle.font.size = "small"
+  )
+
+```
+
+## Distribution of Mean Cost Per Item
+You can visualize the distribution of mean cost per item for a selected drug.
+
+```{r mean-cost-per-item-for-a-selected-drug, echo=FALSE}
+data %>%
+  filter(DRUG == "Doxepin") %>%
+  mutate(Mean_Cost_Per_Item = COST / ITEMS) %>%
+  ggplot(aes(x = Mean_Cost_Per_Item)) +
+  geom_histogram(binwidth = 1, fill = "lightblue", color = "black") +
+  labs(title = "Distribution of Mean Cost per Item for Doxepin", x = "Mean Cost per Item (£)", y = "Frequency") +
+  theme_minimal()
+```
+
+## Trend Analysis Over Time for Significant Drug
+You can also look at the trend for the selected drug over time.
+
+```{r Trend-Analysis-Over-Time, echo=FALSE, warning=FALSE}
+# Monthly trend for a selected drug
+data %>%
+  filter(DRUG == "Doxepin") %>%
+  mutate(Month_Year = as.Date(paste0(substr(YM, 1, 4), "-", substr(YM, 5, 6), "-01"))) %>%  # Extract year and month
+  group_by(Month_Year) %>%
+  summarise(Total_Items = sum(ITEMS), Total_Cost = sum(COST)) %>%
+  ggplot(aes(x = Month_Year)) +
+  geom_line(aes(y = Total_Items, color = "Total Items"), size = 1, alpha = 0.8) +  # Blue line for Total Items
+  geom_line(aes(y = Total_Cost / 1000, color = "Total Cost (in thousands)"), size = 1, alpha = 0.8) +  # Green line for Total Cost (scaled)
+  scale_y_continuous(
+    name = "Total Items",
+    sec.axis = sec_axis(~ . * 1000, name = "Total Cost")  # Secondary axis for Total Cost
+  ) +
+  scale_color_manual(values = c("Total Items" = "blue", "Total Cost (in thousands)" = "green")) +
+  labs(
+    title = paste("Monthly Trend for", "Doxepin"),
+    x = "Month-Year",
+    y = "Total Items",
+    color = "Legend"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  )
+```
+
+
+
+
+
+
+## Summary of Findings
+
+- Prescription volumes and costs have generally increased over the four-year period.
+- The Midlands region has the highest prescription volume, while the Southeast has the highest cost.
+- The most prescribed drug is **Sertraline Hydrochloride**, but it is not the most expensive.
+- Cost variations may be due to drug pricing, regional policies, or prescribing habits.
+
+# Conclusion
+
+This report analyzed antidepressant prescribing trends in England using NHS data. The findings highlight significant regional differences, cost variations, and increasing prescription volumes. Further investigation could explore socioeconomic factors influencing these trends.
